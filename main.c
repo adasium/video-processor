@@ -234,7 +234,6 @@ int str_endswith(const char* string, const char* ending) {
 
 void set_output_path(char* output_path, char* input_path) {
     if (strlen(input_path) < 1) return;
-    if (strlen(output_path) > 0) return;
     char name_suffix[] = "_v2";
     for (size_t i = 0; i < sizeof(EXTENSIONS)/sizeof(EXTENSIONS[0]); ++i) {
         if(str_endswith(input_path, EXTENSIONS[i]) != 0) continue;
