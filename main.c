@@ -14,6 +14,8 @@
 #define LABEL_Y_OFFSET 20
 #define DEFAULT_FONT_SIZE 10
 
+#define DEBUG 0
+
 float clampf(float value, float min, float max) {
     if (value < min) {
         return min;
@@ -24,6 +26,10 @@ float clampf(float value, float min, float max) {
     return value;
 }
 
+const char *EXTENSIONS[] = {
+    ".mp4",
+    ".avi",
+};
 
 
 typedef enum {
@@ -137,7 +143,8 @@ void button_draw(Button *btn, int active) {
 
 
 typedef struct {
-    char* path;
+    char* input_path;
+    char* output_path;
     int crf;
     int crop_top;
     int crop_bottom;
@@ -145,8 +152,10 @@ typedef struct {
     int crop_right;
 } FfmpegParams;
 
+
 void ffmpeg_params_print(FfmpegParams *params) {
-    printf("[DEBUG] path: \"%s\"\n", (*params).path);
+    printf("[DEBUG] input_path: \"%s\"\n", (*params).input_path);
+    printf("[DEBUG] output_path: \"%s\"\n", (*params).output_path);
     printf("[DEBUG] crf: %d\n", (*params).crf);
     printf("[DEBUG] crop: [%d, %d, %d, %d]",
            (*params).crop_top,
@@ -158,7 +167,7 @@ void ffmpeg_params_print(FfmpegParams *params) {
 
 
 int run_ffmpeg(FfmpegParams params) {
-    ffmpeg_params_print(&params);
+    if (DEBUG) ffmpeg_params_print(&params);
 
     char crf_str[3] = {
         (params.crf) % 10 + '0',
@@ -167,7 +176,7 @@ int run_ffmpeg(FfmpegParams params) {
 
     Nob_Cmd cmd = {0};
     nob_cmd_append(&cmd, "ffmpeg");
-    nob_cmd_append(&cmd, "-i", params.path);
+    nob_cmd_append(&cmd, "-i", params.input_path);
     nob_cmd_append(&cmd, "-crf", crf_str);
     if (params.crop_left | params.crop_right | params.crop_left | params.crop_right) {
         char crop[255];
@@ -182,7 +191,7 @@ int run_ffmpeg(FfmpegParams params) {
         nob_cmd_append(&cmd, crop);
     }
 
-    nob_cmd_append(&cmd, "output.mp4");
+    nob_cmd_append(&cmd, params.output_path);
 
     Nob_String_Builder sb = {0};
     nob_cmd_render(cmd, &sb);
@@ -191,16 +200,51 @@ int run_ffmpeg(FfmpegParams params) {
     nob_sb_free(sb);
     memset(&sb, 0, sizeof(sb));
 
-    if(!strlen(params.path)) {
+    if(!strlen(params.input_path)) {
         printf("[INFO] no file is selected.\n");
         return 1;
     } else {
-        printf("[INFO] selected file: %s\n", params.path);
+        printf("[INFO] selected file: %s\n", params.input_path);
     }
 
 
     if (!nob_cmd_run(&cmd)) return 1;
     return 0;
+}
+
+
+void set_input_path(char* input_path) {
+    const char* nemo_paths = getenv("NEMO_SCRIPT_SELECTED_FILE_PATHS");
+    if (nemo_paths == NULL) return;
+
+    if (DEBUG) printf("[DEBUG] %s", nemo_paths);
+    int length = strchr(nemo_paths, '\n') - nemo_paths;
+    strncpy(input_path, nemo_paths, length);
+    return;
+}
+
+
+int str_endswith(const char* string, const char* ending) {
+    char* pos = strrchr(string, '.');
+    if (pos != NULL)
+        return strcmp(pos, ending);
+    return -1;
+}
+
+
+void set_output_path(char* output_path, char* input_path) {
+    if (strlen(input_path) < 1) return;
+    if (strlen(output_path) > 0) return;
+    char name_suffix[] = "_v2";
+    for (size_t i = 0; i < sizeof(EXTENSIONS)/sizeof(EXTENSIONS[0]); ++i) {
+        if(str_endswith(input_path, EXTENSIONS[i]) != 0) continue;
+
+        char* pos = strrchr(input_path, '.');
+        strcpy(output_path, input_path);
+        strcpy(output_path + (pos - input_path), name_suffix);
+        strcpy(output_path + (pos - input_path) + strlen(name_suffix), EXTENSIONS[i]);
+        return;
+    }
 }
 
 
@@ -211,7 +255,10 @@ int main(void)
     SetTargetFPS(60);
 
     bool exit_window = false;
-    char file_path[MAX_FILEPATH_SIZE] = "";
+    char input_path[MAX_FILEPATH_SIZE] = "";
+    char output_path[MAX_FILEPATH_SIZE] = "";
+    set_input_path(input_path);
+    set_output_path(output_path, input_path);
     InteractingWith interacting_with = NOTHING;
     Vector2 center = {
         GetScreenWidth() / 2,
@@ -298,14 +345,15 @@ int main(void)
         if (IsFileDropped()) {
             FilePathList dropped_files = LoadDroppedFiles();
             if (dropped_files.count > 0) {
-                strcpy(file_path, dropped_files.paths[0]);
+                strcpy(input_path, dropped_files.paths[0]);
+                set_output_path(output_path, input_path);
             }
             UnloadDroppedFiles(dropped_files);
         }
 
         Vector2 mouse = GetMousePosition();
         if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
-            slider_debug(&crf);
+            if (DEBUG) slider_debug(&crf);
             while (1) {
                 if (interacting_with == NOTHING) {
                     if(slider_check_collision_point(&crf, mouse)) {
@@ -360,7 +408,8 @@ int main(void)
         if (IsMouseButtonUp(MOUSE_BUTTON_LEFT)) {
             if(interacting_with == SUBMIT_BTN && CheckCollisionPointRec(mouse, submit_btn.bounds)) {
                 FfmpegParams params = {
-                    .path = file_path,
+                    .input_path = input_path,
+                    .output_path = output_path,
                     .crf = crf.value,
                     .crop_top = crop_top.value,
                     .crop_bottom = crop_bottom.value,
@@ -374,8 +423,13 @@ int main(void)
 
         BeginDrawing();
             ClearBackground(GetColor(0xffffffff));
-            DrawText(TextFormat("path: %s", file_path),
-                     center.x - slider_x_offset,
+            DrawText(TextFormat("input path: %s", input_path),
+                     center.x - slider_x_offset * 2,
+                     center.y - slider_y_offset * 4,
+                     20,
+                     BLACK);
+            DrawText(TextFormat("output path: %s", output_path),
+                     center.x - slider_x_offset * 2,
                      center.y - slider_y_offset * 3,
                      20,
                      BLACK);
