@@ -1,0 +1,4 @@
+Original Raylib 5.5 source code downloaded from https://github.com/raysan5/raylib/releases/tag/5.5
+Stripped off everything except `./LICENSE` and `./src/`.
+
+- adasium
