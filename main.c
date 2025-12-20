@@ -9,22 +9,7 @@
 #define MAX_FILEPATH_SIZE       2048
 
 #define MAX_CRF 64
-
-void draw_slider(int x, int y, int width, float percentage) {
-    const int button_width = 10;
-    const int button_height = 10;
-    const int line_thickness = 2;
-    DrawRectangle(x, y, width, line_thickness, LIGHTGRAY);
-    DrawRectangle(x+width*percentage/100.0f-button_width/2, y-button_height/2, button_width, button_height, GRAY);
-}
-
-typedef enum {
-    NOTHING,
-    BACKGROUND,
-    CRF,
-    SUBMIT_BTN,
-} InteractingWith;
-
+#define SLIDER_BUTTON_SIZE 10
 
 float clampf(float value, float min, float max) {
     if (value < min) {
@@ -35,6 +20,84 @@ float clampf(float value, float min, float max) {
     }
     return value;
 }
+
+
+
+typedef enum {
+    NOTHING,
+    BACKGROUND,
+    CRF,
+    SUBMIT_BTN,
+} InteractingWith;
+
+
+typedef struct {
+    Rectangle bounds;
+    int min;
+    int max;
+    int value;
+    int step;
+} Slider;
+
+
+void slider_debug(Slider *slider) {
+    printf("[%f %f %f %f] %d (%d %d, %d)\n",
+            (*slider).bounds.x,
+            (*slider).bounds.y,
+            (*slider).bounds.width,
+            (*slider).bounds.height,
+            (*slider).value,
+            (*slider).min,
+            (*slider).max,
+            (*slider).step
+            );
+}
+
+
+Rectangle slider_get_button_bounds(Slider *slider) {
+    Rectangle rect = {
+        (*slider).bounds.x - SLIDER_BUTTON_SIZE/2 + (*slider).bounds.width * (*slider).value / (*slider).max,
+        (*slider).bounds.y - SLIDER_BUTTON_SIZE/2,
+        SLIDER_BUTTON_SIZE,
+        SLIDER_BUTTON_SIZE,
+    };
+    return rect;
+}
+
+
+int slider_check_collision_point(Slider *slider, Vector2 mouse) {
+
+    if (CheckCollisionPointRec(mouse, (*slider).bounds)) {
+        return true;
+    }
+    return false;
+}
+
+
+void slider_set_value(Slider *slider, Vector2 mouse) {
+    float value = clampf(mouse.x, (*slider).bounds.x, (*slider).bounds.x + (*slider).bounds.width) - (*slider).bounds.x;
+    value /= (*slider).bounds.width;
+    value *= (*slider).max;
+    (*slider).value = (int)value;
+}
+
+
+void slider_draw(Slider *slider) {
+    const int line_thickness = 2;
+    DrawRectangle(
+                  (*slider).bounds.x,
+                  (*slider).bounds.y + SLIDER_BUTTON_SIZE/2,
+                  (*slider).bounds.width,
+                  line_thickness,
+                  LIGHTGRAY);
+    DrawRectangle(
+                  (*slider).bounds.x + (*slider).bounds.width*(*slider).value/(*slider).max - SLIDER_BUTTON_SIZE/2,
+                  (*slider).bounds.y,
+                  SLIDER_BUTTON_SIZE,
+                  SLIDER_BUTTON_SIZE,
+                  GRAY);
+}
+
 
 
 int run_ffmpeg(char* path, int crf) {
@@ -71,7 +134,18 @@ int main(void)
     char file_path[MAX_FILEPATH_SIZE] = "";
     InteractingWith interacting_with = NOTHING;
 
-    int crf = 28;
+    Slider crf = {
+        .bounds = {
+            100,
+            200,
+            100,
+            20
+        },
+        .min = 1,
+        .max = 64,
+        .value = 28,
+        .step = 1,
+    };
     Rectangle submit_btn = {
         100,
         250,
@@ -90,31 +164,15 @@ int main(void)
             UnloadDroppedFiles(dropped_files);
         }
 
-        Rectangle slider_bounds = {
-            100,
-            200,
-            100,
-            20
-        };
-        Rectangle slider_btn = {
-            slider_bounds.x-5 + slider_bounds.width*crf/MAX_CRF,
-            slider_bounds.y-5,
-            10,
-            10
-        };
-
-
         Vector2 mouse = GetMousePosition();
         if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
-            printf("%f %f %f %f | %f %f\n", slider_btn.x, slider_btn.y, slider_btn.width, slider_btn.height, mouse.x, mouse.y);
-
+            slider_debug(&crf);
             while (1) {
                 if (interacting_with == NOTHING) {
-                    if(CheckCollisionPointRec(mouse, slider_btn)) {
+                    if(slider_check_collision_point(&crf, mouse)) {
                         interacting_with = CRF;
                         break;
                     }
-
                     if(CheckCollisionPointRec(mouse, submit_btn)) {
                         interacting_with = SUBMIT_BTN;
                         break;
@@ -126,16 +184,13 @@ int main(void)
             }
 
             if (interacting_with == CRF) {
-                float value = clampf(mouse.x, slider_bounds.x, slider_bounds.x+slider_bounds.width) - slider_bounds.x;
-                value /= slider_bounds.width;
-                value *= MAX_CRF;
-                crf = (int)value;
+                slider_set_value(&crf, mouse);
             }
         }
 
         if (IsMouseButtonUp(MOUSE_BUTTON_LEFT)) {
             if(interacting_with == SUBMIT_BTN && CheckCollisionPointRec(mouse, submit_btn)) {
-                run_ffmpeg(file_path, crf);
+                run_ffmpeg(file_path, crf.value);
             }
             interacting_with = NOTHING;
         }
@@ -143,8 +198,8 @@ int main(void)
         BeginDrawing();
             ClearBackground(RAYWHITE);
             DrawText(TextFormat("path: %s", file_path), 100, 100, 20, BLACK);
-            DrawText(TextFormat("CRF: %d", crf), 100, 170, 20, BLACK);
-            draw_slider(100, 200, 100, 100.f*crf/MAX_CRF);
+            DrawText(TextFormat("CRF: %d", crf.value), 100, 170, 20, BLACK);
+            slider_draw(&crf);
             if (interacting_with == SUBMIT_BTN) {
                 DrawRectangleRec(submit_btn, GRAY);
             }
@@ -155,7 +210,7 @@ int main(void)
                      "run",
                      submit_btn.x + submit_btn.width/3 - size/2,
                      submit_btn.y + submit_btn.height/4,
-                     crf/MAX_CRF,
+                     28,
                      BLACK);
         EndDrawing();
     }
