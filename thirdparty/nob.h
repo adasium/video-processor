@@ -590,7 +590,7 @@ NOBDEF char *nob_temp_running_executable_path(void);
 #ifndef nob_cc
 #  if _WIN32
 #    if defined(__GNUC__)
-#       define nob_cc(cmd) nob_cmd_append(cmd, "cc")
+#       define nob_cc(cmd) nob_cmd_append(cmd, "gcc")
 #    elif defined(__clang__)
 #       define nob_cc(cmd) nob_cmd_append(cmd, "clang")
 #    elif defined(_MSC_VER)
@@ -1922,7 +1922,7 @@ NOBDEF bool nob_read_entire_file(const char *path, Nob_String_Builder *sb)
     long long m = 0;
     if (f == NULL)                 nob_return_defer(false);
     if (fseek(f, 0, SEEK_END) < 0) nob_return_defer(false);
-#ifndef _WIN32
+#if !defined(_WIN32) || defined(__GNUC__)
     m = ftell(f);
 #else
     m = _ftelli64(f);
@@ -2166,7 +2166,7 @@ NOBDEF char *nob_temp_dir_name(const char *path)
     char *drive = nob_temp_alloc(_MAX_DRIVE);
     char *dir   = nob_temp_alloc(_MAX_DIR);
     // https://learn.microsoft.com/en-us/previous-versions/visualstudio/visual-studio-2010/8e46eyt7(v=vs.100)
-    errno_t ret = _splitpath_s(path, drive, _MAX_DRIVE, dir, _MAX_DIR, NULL, 0, NULL, 0);
+    int ret = _splitpath_s(path, drive, _MAX_DRIVE, dir, _MAX_DIR, NULL, 0, NULL, 0);
     NOB_ASSERT(ret == 0);
     return nob_temp_sprintf("%s%s", drive, dir);
 #endif // _WIN32
@@ -2189,7 +2189,7 @@ NOBDEF char *nob_temp_file_name(const char *path)
     char *fname = nob_temp_alloc(_MAX_FNAME);
     char *ext = nob_temp_alloc(_MAX_EXT);
     // https://learn.microsoft.com/en-us/previous-versions/visualstudio/visual-studio-2010/8e46eyt7(v=vs.100)
-    errno_t ret = _splitpath_s(path, NULL, 0, NULL, 0, fname, _MAX_FNAME, ext, _MAX_EXT);
+    int ret = _splitpath_s(path, NULL, 0, NULL, 0, fname, _MAX_FNAME, ext, _MAX_EXT);
     NOB_ASSERT(ret == 0);
     return nob_temp_sprintf("%s%s", fname, ext);
 #endif // _WIN32
@@ -2203,7 +2203,7 @@ NOBDEF char *nob_temp_file_ext(const char *path)
     if (!path) path = ""; // Treating NULL as empty.
     char *ext = nob_temp_alloc(_MAX_EXT);
     // https://learn.microsoft.com/en-us/previous-versions/visualstudio/visual-studio-2010/8e46eyt7(v=vs.100)
-    errno_t ret = _splitpath_s(path, NULL, 0, NULL, 0, NULL, 0, ext, _MAX_EXT);
+    int ret = _splitpath_s(path, NULL, 0, NULL, 0, NULL, 0, ext, _MAX_EXT);
     NOB_ASSERT(ret == 0);
     return ext;
 #endif // _WIN32
