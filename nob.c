@@ -91,7 +91,7 @@ int main(int argc, char **argv)
     nob_cc_flags(&cmd);
     nob_cc_output(&cmd, "vp");
     nob_cc_inputs(&cmd, "main.c");
-    nob_cmd_append(&cmd, "-fsanitize=address");
+    /* nob_cmd_append(&cmd, "-fsanitize=address"); */
     nob_cmd_append(&cmd, "-I.");
     nob_cmd_append(&cmd, "-I"RAYLIB_SRC_FOLDER);
     nob_cmd_append(&cmd,
