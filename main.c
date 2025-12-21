@@ -14,7 +14,7 @@
 #define LABEL_Y_OFFSET 20
 #define DEFAULT_FONT_SIZE 10
 
-#define DEBUG 0
+#define DEBUG 1
 
 #define ARRAY_LEN(array) (sizeof(array)/sizeof(array[0]))
 
@@ -27,23 +27,18 @@ float clampf(float value, float min, float max) {
     }
     return value;
 }
+int min(int a, int b) {
+    return a < b ? a : b;
+}
+
+int max(int a, int b) {
+    return a > b ? a : b;
+}
 
 const char *EXTENSIONS[] = {
     ".mp4",
     ".avi",
 };
-
-
-typedef enum {
-    NOTHING,
-    BACKGROUND,
-    CRF,
-    CROP_TOP,
-    CROP_BOTTOM,
-    CROP_LEFT,
-    CROP_RIGHT,
-    SUBMIT_BTN,
-} InteractingWith;
 
 
 typedef struct {
@@ -177,7 +172,7 @@ int run_ffmpeg(FfmpegParams params) {
     };
 
     Nob_Cmd cmd = {0};
-    nob_cmd_append(&cmd, "ffmpeg");
+    nob_cmd_append(&cmd, "ffmpeg", "-y");
     nob_cmd_append(&cmd, "-i", params.input_path);
     nob_cmd_append(&cmd, "-crf", crf_str);
     if (params.crop_left | params.crop_right | params.crop_left | params.crop_right) {
@@ -248,6 +243,23 @@ void set_output_path(char* output_path, char* input_path) {
     }
 }
 
+typedef enum {
+    NOTHING,
+    BACKGROUND,
+    SLIDER,
+    BUTTON,
+} UIElement;
+
+
+typedef struct {
+    UIElement type;
+    union {
+        Button *button;
+        Slider *slider;
+    };
+} InteractingWith;
+
+
 
 int main(void)
 {
@@ -260,7 +272,8 @@ int main(void)
     char output_path[MAX_FILEPATH_SIZE] = "";
     set_input_path(input_path);
     set_output_path(output_path, input_path);
-    InteractingWith interacting_with = NOTHING;
+    InteractingWith interacting_with = {NOTHING, {0}};
+    InteractingWith last_interacted_with = {NOTHING, {0}};
     Vector2 center = {
         GetScreenWidth() / 2,
         GetScreenHeight() / 2,
@@ -339,6 +352,14 @@ int main(void)
         .label = "run",
         .font_size = 28,
     };
+
+    Slider *sliders[] = {
+        &crf,
+        &crop_top,
+        &crop_bottom,
+        &crop_left,
+        &crop_right,
+    };
     while (!exit_window)
     {
         if (IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_Q) || WindowShouldClose()) exit_window = true;
@@ -354,60 +375,40 @@ int main(void)
 
         Vector2 mouse = GetMousePosition();
         if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
-            if (DEBUG) slider_debug(&crf);
-            while (1) {
-                if (interacting_with == NOTHING) {
-                    if(slider_check_collision_point(&crf, mouse)) {
-                        interacting_with = CRF;
-                        break;
+            /* if (DEBUG) slider_debug(&crf); */
+            if (interacting_with.type == NOTHING) {
+                for (size_t i = 0; i < ARRAY_LEN(sliders); ++i) {
+                    if(slider_check_collision_point(sliders[i], mouse)) {
+                        interacting_with.type = SLIDER;
+                        interacting_with.slider = sliders[i];
+                        goto interacted;
                     }
-
-                    if(slider_check_collision_point(&crop_top, mouse)) {
-                        interacting_with = CROP_TOP;
-                        break;
-                    }
-                    if(slider_check_collision_point(&crop_bottom, mouse)) {
-                        interacting_with = CROP_BOTTOM;
-                        break;
-                    }
-                    if(slider_check_collision_point(&crop_left, mouse)) {
-                        interacting_with = CROP_LEFT;
-                        break;
-                    }
-                    if(slider_check_collision_point(&crop_right, mouse)) {
-                        interacting_with = CROP_RIGHT;
-                        break;
-                    }
-
-                    if(CheckCollisionPointRec(mouse, submit_btn.bounds)) {
-                        interacting_with = SUBMIT_BTN;
-                        break;
-                    }
-                    interacting_with = BACKGROUND;
-                    break;
                 }
-                break;
-            }
 
-            if (interacting_with == CRF) {
-                slider_set_value(&crf, mouse);
+                if(CheckCollisionPointRec(mouse, submit_btn.bounds)) {
+                    interacting_with.type = BUTTON;
+                    interacting_with.button = &submit_btn;
+                    goto interacted;
+                }
+                interacting_with.type = BACKGROUND;
+                goto interacted;
             }
-            if (interacting_with == CROP_TOP) {
-                slider_set_value(&crop_top, mouse);
+        interacted:
+            last_interacted_with = interacting_with;
+
+            if (interacting_with.type == SLIDER) {
+                slider_set_value(interacting_with.slider, mouse);
             }
-            if (interacting_with == CROP_BOTTOM) {
-                slider_set_value(&crop_bottom, mouse);
-            }
-            if (interacting_with == CROP_LEFT) {
-                slider_set_value(&crop_left, mouse);
-            }
-            if (interacting_with == CROP_RIGHT) {
-                slider_set_value(&crop_right, mouse);
-            }
+        }
+        if (IsKeyPressed(KEY_LEFT) && last_interacted_with.type == SLIDER) {
+            last_interacted_with.slider->value = max(last_interacted_with.slider->value - last_interacted_with.slider->step, last_interacted_with.slider->min);
+        }
+        if (IsKeyPressed(KEY_RIGHT) && last_interacted_with.type == SLIDER) {
+            last_interacted_with.slider->value = min(last_interacted_with.slider->value + last_interacted_with.slider->step, last_interacted_with.slider->max);
         }
 
         if (IsMouseButtonUp(MOUSE_BUTTON_LEFT)) {
-            if(interacting_with == SUBMIT_BTN && CheckCollisionPointRec(mouse, submit_btn.bounds)) {
+            if(interacting_with.type == BUTTON && interacting_with.button == &submit_btn && CheckCollisionPointRec(mouse, submit_btn.bounds)) {
                 FfmpegParams params = {
                     .input_path = input_path,
                     .output_path = output_path,
@@ -419,7 +420,7 @@ int main(void)
                 };
                 run_ffmpeg(params);
             }
-            interacting_with = NOTHING;
+            interacting_with.type = NOTHING;
         }
 
         BeginDrawing();
@@ -440,7 +441,7 @@ int main(void)
             slider_draw(&crop_bottom, "crop bottom");
             slider_draw(&crop_left, "crop left");
             slider_draw(&crop_right, "crop right");
-            button_draw(&submit_btn, interacting_with == SUBMIT_BTN);
+            button_draw(&submit_btn, interacting_with.type == BUTTON && interacting_with.button == &submit_btn);
         EndDrawing();
     }
 
