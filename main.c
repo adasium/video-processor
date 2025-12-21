@@ -1,4 +1,4 @@
-#include "raylib.h"
+#include "./thirdparty/raylib/src/raylib.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -15,6 +15,8 @@
 #define DEFAULT_FONT_SIZE 10
 
 #define DEBUG 0
+
+#define ARRAY_LEN(array) (sizeof(array)/sizeof(array[0]))
 
 float clampf(float value, float min, float max) {
     if (value < min) {
