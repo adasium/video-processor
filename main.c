@@ -425,14 +425,14 @@ int main(void)
         BeginDrawing();
             ClearBackground(GetColor(0xffffffff));
             DrawText(TextFormat("input path: %s", input_path),
-                     center.x - slider_x_offset * 2,
-                     center.y - slider_y_offset * 4,
-                     20,
+                     0,
+                     0,
+                     18,
                      BLACK);
             DrawText(TextFormat("output path: %s", output_path),
-                     center.x - slider_x_offset * 2,
-                     center.y - slider_y_offset * 3,
-                     20,
+                     0,
+                     50,
+                     18,
                      BLACK);
 
             slider_draw(&crf, "crf");
