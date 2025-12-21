@@ -167,8 +167,8 @@ int run_ffmpeg(FfmpegParams params) {
     if (DEBUG) ffmpeg_params_print(&params);
 
     char crf_str[3] = {
-        (params.crf) % 10 + '0',
         params.crf / 10 + '0',
+        (params.crf) % 10 + '0',
     };
 
     Nob_Cmd cmd = {0};
@@ -204,7 +204,7 @@ int run_ffmpeg(FfmpegParams params) {
         printf("[INFO] selected file: %s\n", params.input_path);
     }
 
-
+    fflush(stdout);
     if (!nob_cmd_run(&cmd)) return 1;
     return 0;
 }
