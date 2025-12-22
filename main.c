@@ -278,14 +278,15 @@ int main(void)
         GetScreenWidth() / 2,
         GetScreenHeight() / 2,
     };
-    int slider_width = 100;
+    int slider_width = 150;
     int slider_height = 20;
-    int slider_x_offset = 150;
+    Vector2 slider_start = {50, 100};
+    int slider_x_offset = slider_width + 50;
     int slider_y_offset = 50;
     Slider crf = {
         .bounds = {
-            center.x,
-            center.y,
+            slider_start.x + slider_x_offset,
+            slider_start.y + slider_y_offset * 2,
             slider_width,
             slider_height,
         },
@@ -296,8 +297,8 @@ int main(void)
     };
     Slider crop_top = {
         .bounds = {
-            center.x,
-            center.y - slider_y_offset,
+            slider_start.x + slider_x_offset,
+            slider_start.y + slider_y_offset,
             slider_width,
             slider_height,
         },
@@ -308,8 +309,8 @@ int main(void)
     };
     Slider crop_bottom = {
         .bounds = {
-            center.x,
-            center.y + slider_y_offset,
+            slider_start.x + slider_x_offset,
+            slider_start.y + slider_y_offset * 3,
             slider_width,
             slider_height,
         },
@@ -320,8 +321,8 @@ int main(void)
     };
     Slider crop_left = {
         .bounds = {
-            center.x - slider_x_offset,
-            center.y,
+            slider_start.x,
+            slider_start.y + slider_y_offset * 2,
             slider_width,
             slider_height,
         },
@@ -332,8 +333,8 @@ int main(void)
     };
     Slider crop_right = {
         .bounds = {
-            center.x + slider_x_offset,
-            center.y,
+            slider_start.x + slider_x_offset * 2,
+            slider_start.y + slider_y_offset * 2,
             slider_width,
             slider_height,
         },
