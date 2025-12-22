@@ -19,14 +19,17 @@
 #define ARRAY_LEN(array) (sizeof(array)/sizeof(array[0]))
 
 float clampf(float value, float min, float max) {
-    if (value < min) {
-        return min;
-    }
-    if (value > max) {
-        return max;
-    }
+    if (value < min) return min;
+    if (value > max) return max;
     return value;
 }
+
+int clamp(int value, int min, int max) {
+    if (value < min) return min;
+    if (value > max) return max;
+    return value;
+}
+
 int min(int a, int b) {
     return a < b ? a : b;
 }
@@ -406,6 +409,19 @@ int main(void)
         }
         if (IsKeyPressed(KEY_RIGHT) && last_interacted_with.type == SLIDER) {
             last_interacted_with.slider->value = min(last_interacted_with.slider->value + last_interacted_with.slider->step, last_interacted_with.slider->max);
+        }
+
+        float mwheel_move = GetMouseWheelMove();
+        if (mwheel_move != 0) {
+            for (size_t i = 0; i < ARRAY_LEN(sliders); ++i) {
+                if(slider_check_collision_point(sliders[i], mouse)) {
+                    sliders[i]->value = clamp(
+                                              sliders[i]->value + sliders[i]->step * (mwheel_move > 0 ? -1 : 1),
+                                              sliders[i]->min,
+                                              sliders[i]->max);
+                }
+            }
+
         }
 
         if (IsMouseButtonUp(MOUSE_BUTTON_LEFT)) {
