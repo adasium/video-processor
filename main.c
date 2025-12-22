@@ -178,17 +178,17 @@ int run_ffmpeg(FfmpegParams params) {
     nob_cmd_append(&cmd, "ffmpeg", "-y");
     nob_cmd_append(&cmd, "-i", params.input_path);
     nob_cmd_append(&cmd, "-crf", crf_str);
+    char crop[255] = {0};
     if (params.crop_left | params.crop_right | params.crop_left | params.crop_right) {
-        char crop[255];
         sprintf(
                 crop,
                 "crop=in_w-%d:in_h-%d:%d:%d",
                 params.crop_left + params.crop_right,
                 params.crop_top + params.crop_bottom,
                 params.crop_left,
-                params.crop_right
+                params.crop_top
                 );
-        nob_cmd_append(&cmd, crop);
+        nob_cmd_append(&cmd, "-vf", crop);
     }
 
     nob_cmd_append(&cmd, params.output_path);
