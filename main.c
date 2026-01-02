@@ -159,6 +159,7 @@ typedef struct {
     int crop_bottom;
     int crop_left;
     int crop_right;
+    int volume;
     AudioChannels audio_channels;
 } FfmpegParams;
 
@@ -201,12 +202,22 @@ int run_ffmpeg(FfmpegParams params) {
                 );
         nob_cmd_append(&cmd, "-vf", crop);
     }
+
+    char audio[255] = {0};
     if (params.audio_channels == CLONE_LEFT) {
-        nob_cmd_append(&cmd, "-af", "pan=stereo|FL=FL|FR=FL");
+        char* option = "pan=stereo|FL=FL|FR=FL";
+        snprintf(audio, strlen(option) + 1, "%s", option);
     }
     if (params.audio_channels == CLONE_RIGHT) {
-        nob_cmd_append(&cmd, "-af", "pan=stereo|FL=FR|FR=FR");
+        char* option ="pan=stereo|FL=FR|FR=FR";
+        snprintf(audio, strlen(option) + 1, "%s", option);
     }
+
+    if (strlen(audio) > 0) snprintf(audio + strlen(audio), 2, ",");
+    snprintf(audio + strlen(audio), strlen("volume=")+5, "volume=%.2f", (float)params.volume/100);
+
+    if (strlen(audio) > 0) nob_cmd_append(&cmd, "-af", audio);
+
 
     nob_cmd_append(&cmd, params.output_path);
 
@@ -314,7 +325,6 @@ int radio_group_check_collision_point(RadioGroup *radio_group, Vector2 mouse) {
 
 void radio_group_set_value(RadioGroup *radio_group, Vector2 mouse) {
     int option = radio_group_check_collision_point(radio_group, mouse);
-    printf("- %d\n", option);
     if (option) {
         (*radio_group).selected_value = option;
     }
@@ -464,6 +474,18 @@ int main(void)
         .value = 0,
         .step = 50,
     };
+    Slider volume = {
+        .bounds = {
+            slider_start.x + slider_x_offset,
+            slider_start.y + slider_y_offset * 4,
+            slider_width,
+            slider_height,
+        },
+        .min = 1,
+        .max = 150,
+        .value = 100,
+        .step = 5,
+    };
     Button submit_btn = {
         .bounds = {
             .x = center.x + slider_x_offset,
@@ -481,6 +503,7 @@ int main(void)
         &crop_bottom,
         &crop_left,
         &crop_right,
+        &volume,
     };
     RadioGroup audio_channnels_radio_group = {
         .bounds = {
@@ -580,6 +603,7 @@ int main(void)
                     .crop_bottom = crop_bottom.value,
                     .crop_left = crop_left.value,
                     .crop_right = crop_right.value,
+                    .volume = volume.value,
                     .audio_channels = audio_channnels_radio_group.selected_value,
                 };
                 run_ffmpeg(params);
@@ -605,6 +629,7 @@ int main(void)
             slider_draw(&crop_bottom, "crop bottom");
             slider_draw(&crop_left, "crop left");
             slider_draw(&crop_right, "crop right");
+            slider_draw(&volume, "volume");
             button_draw(&submit_btn, interacting_with.type == BUTTON && interacting_with.button == &submit_btn);
             radio_group_draw(&audio_channnels_radio_group);
         EndDrawing();
