@@ -220,6 +220,7 @@ int run_ffmpeg(FfmpegParams params) {
 
 
     nob_cmd_append(&cmd, params.output_path);
+    nob_cmd_append(&cmd, "-progress pipe:1");
 
     Nob_String_Builder sb = {0};
     nob_cmd_render(cmd, &sb);
@@ -395,6 +396,8 @@ int main(void)
     da_append(&audio_channel_labels, "CLONE RIGHT");
 
     InitWindow(800, 450, "video-processor");
+    Image icon = LoadImage("assets/icons/video-processor.png");
+    SetWindowIcon(icon);
     SetWindowMonitor(0);
     SetTargetFPS(60);
 
