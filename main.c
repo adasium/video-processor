@@ -67,17 +67,6 @@ void slider_debug(Slider *slider) {
 }
 
 
-Rectangle slider_get_button_bounds(Slider *slider) {
-    Rectangle rect = {
-        (*slider).bounds.x - SLIDER_BUTTON_SIZE/2 + (*slider).bounds.width * (*slider).value / (*slider).max,
-        (*slider).bounds.y - SLIDER_BUTTON_SIZE/2,
-        SLIDER_BUTTON_SIZE,
-        SLIDER_BUTTON_SIZE,
-    };
-    return rect;
-}
-
-
 int slider_check_collision_point(Slider *slider, Vector2 mouse) {
 
     if (CheckCollisionPointRec(mouse, (*slider).bounds)) {
@@ -141,6 +130,26 @@ void button_draw(Button *btn, int active) {
 
 }
 
+typedef enum {
+    NO_MODIFICATION = 1,
+    CLONE_LEFT,
+    CLONE_RIGHT,
+    AUDIO_CHANNELS_LAST,
+} AudioChannels;
+
+typedef struct {
+    const char **items;
+    size_t count;
+    size_t capacity;
+} Labels;
+
+#define da_append(da, item)                    \
+    do {                                       \
+        nob_da_reserve((da), (da)->count + 1); \
+        (da)->items[(da)->count++] = (item);   \
+    } while (0)
+
+Labels audio_channel_labels = {0};
 
 typedef struct {
     char* input_path;
@@ -150,6 +159,7 @@ typedef struct {
     int crop_bottom;
     int crop_left;
     int crop_right;
+    AudioChannels audio_channels;
 } FfmpegParams;
 
 
@@ -178,8 +188,9 @@ int run_ffmpeg(FfmpegParams params) {
     nob_cmd_append(&cmd, "ffmpeg", "-y");
     nob_cmd_append(&cmd, "-i", params.input_path);
     nob_cmd_append(&cmd, "-crf", crf_str);
+
     char crop[255] = {0};
-    if (params.crop_left | params.crop_right | params.crop_left | params.crop_right) {
+    if (params.crop_top | params.crop_bottom | params.crop_left | params.crop_right) {
         sprintf(
                 crop,
                 "crop=in_w-%d:in_h-%d:%d:%d",
@@ -189,6 +200,12 @@ int run_ffmpeg(FfmpegParams params) {
                 params.crop_top
                 );
         nob_cmd_append(&cmd, "-vf", crop);
+    }
+    if (params.audio_channels == CLONE_LEFT) {
+        nob_cmd_append(&cmd, "-af", "pan=stereo|FL=FL|FR=FL");
+    }
+    if (params.audio_channels == CLONE_RIGHT) {
+        nob_cmd_append(&cmd, "-af", "pan=stereo|FL=FR|FR=FR");
     }
 
     nob_cmd_append(&cmd, params.output_path);
@@ -251,7 +268,103 @@ typedef enum {
     BACKGROUND,
     SLIDER,
     BUTTON,
+    RADIO_GROUP,
 } UIElement;
+
+typedef enum {
+    AUDIO_CHANNELS,
+} EnumKind;
+
+
+typedef struct {
+    Rectangle bounds;
+    char *label;
+    Labels labels;
+    int font_size;
+    int selected_value;
+    int first_value;
+    int last_value;
+    EnumKind enum_kind;
+    int button_radius;
+    int spacing;
+    int padding;
+} RadioGroup;
+
+
+int radio_group_check_collision_point(RadioGroup *radio_group, Vector2 mouse) {
+    int spacing = (*radio_group).font_size/DEFAULT_FONT_SIZE;
+    float cum_text_size_y = 0;
+    for (int option = (*radio_group).first_value, i = 0; option < (*radio_group).last_value; ++option, ++i) {
+        Vector2 text_size = MeasureTextEx(GetFontDefault(), (*radio_group).labels.items[i], (*radio_group).font_size, (float)spacing);
+        if(CheckCollisionPointRec(
+                                  mouse,
+                                  (Rectangle){
+                                      (*radio_group).bounds.x + (*radio_group).padding,
+                                      (*radio_group).bounds.y + (*radio_group).padding + cum_text_size_y + (*radio_group).spacing * i,
+                                      text_size.x + (*radio_group).button_radius * 2 + (*radio_group).spacing,
+                                      text_size.y,
+                                  }
+                                  )) {
+               return option;
+        }
+        cum_text_size_y += text_size.y;
+    }
+    return false;
+}
+
+void radio_group_set_value(RadioGroup *radio_group, Vector2 mouse) {
+    int option = radio_group_check_collision_point(radio_group, mouse);
+    printf("- %d\n", option);
+    if (option) {
+        (*radio_group).selected_value = option;
+    }
+}
+
+
+void radio_group_draw(RadioGroup *radio_group) {
+    int line_thickness = 1;
+    int padding = 10;
+
+
+    int spacing = (*radio_group).font_size/DEFAULT_FONT_SIZE;
+    Vector2 max_size = {0, 0};
+    for (size_t i = 0; i < (*radio_group).labels.count; ++i) {
+        Vector2 text_size = MeasureTextEx(GetFontDefault(), (*radio_group).labels.items[i], (*radio_group).font_size, (float)spacing);
+        if (max_size.x <= text_size.x) max_size.x = text_size.x;
+        if (max_size.y <= text_size.y) max_size.y = text_size.y;
+    }
+
+    float cum_text_size_y = 0;
+    for (int option = (*radio_group).first_value, i = 0; option < (*radio_group).last_value; ++option, ++i) {
+        (option == (*radio_group).selected_value ? DrawCircle : DrawCircleLines)
+            (
+             (*radio_group).bounds.x + (*radio_group).button_radius + padding,
+             (*radio_group).bounds.y + (*radio_group).button_radius + padding + cum_text_size_y + i * (*radio_group).spacing,
+             (*radio_group).button_radius,
+             BLACK);
+
+        Vector2 text_size = MeasureTextEx(GetFontDefault(), (*radio_group).labels.items[i], (*radio_group).font_size, (float)spacing);
+        DrawText(
+                 (*radio_group).labels.items[i],
+                 (*radio_group).bounds.x + padding + (*radio_group).button_radius*2 + (*radio_group).spacing,
+                 (*radio_group).bounds.y + padding + cum_text_size_y + (*radio_group).spacing * i,
+                 (*radio_group).font_size,
+                 BLACK);
+        cum_text_size_y += text_size.y;
+    }
+
+    DrawRectangleLinesEx(
+                         (Rectangle){
+                             (*radio_group).bounds.x,
+                             (*radio_group).bounds.y,
+                             max_size.x + (*radio_group).button_radius * 2 + padding * 2 + padding,
+                             cum_text_size_y + (*radio_group).spacing * ((*radio_group).labels.count - 1) + padding * 2,
+                         },
+                         line_thickness,
+                         BLACK);
+}
+
+
 
 
 typedef struct {
@@ -259,13 +372,18 @@ typedef struct {
     union {
         Button *button;
         Slider *slider;
+        RadioGroup *radio_group;
     };
 } InteractingWith;
 
 
-
 int main(void)
 {
+
+    da_append(&audio_channel_labels, "NO MODIFICATION");
+    da_append(&audio_channel_labels, "CLONE LEFT");
+    da_append(&audio_channel_labels, "CLONE RIGHT");
+
     InitWindow(800, 450, "video-processor");
     SetWindowMonitor(0);
     SetTargetFPS(60);
@@ -364,6 +482,24 @@ int main(void)
         &crop_left,
         &crop_right,
     };
+    RadioGroup audio_channnels_radio_group = {
+        .bounds = {
+            .x = 20,
+            .y = 300,
+            .width = 100,
+            .height = 50,
+        },
+        .label = "audio channels",
+        .labels = audio_channel_labels,
+        .font_size = 12,
+        .selected_value = NO_MODIFICATION,
+        .first_value = NO_MODIFICATION,
+        .last_value = AUDIO_CHANNELS_LAST,
+        .enum_kind = AUDIO_CHANNELS,
+        .button_radius = 5,
+        .spacing = 5,
+        .padding = 10,
+    };
     while (!exit_window)
     {
         if (IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_Q) || WindowShouldClose()) exit_window = true;
@@ -392,6 +528,13 @@ int main(void)
                 if(CheckCollisionPointRec(mouse, submit_btn.bounds)) {
                     interacting_with.type = BUTTON;
                     interacting_with.button = &submit_btn;
+                    goto interacted;
+                }
+
+                int r_option = radio_group_check_collision_point(&audio_channnels_radio_group, mouse);
+                if(r_option) {
+                    interacting_with.type = RADIO_GROUP;
+                    interacting_with.radio_group = &audio_channnels_radio_group;
                     goto interacted;
                 }
                 interacting_with.type = BACKGROUND;
@@ -425,6 +568,9 @@ int main(void)
         }
 
         if (IsMouseButtonUp(MOUSE_BUTTON_LEFT)) {
+            if(interacting_with.type == RADIO_GROUP) {
+                radio_group_set_value(interacting_with.radio_group, mouse);
+            }
             if(interacting_with.type == BUTTON && interacting_with.button == &submit_btn && CheckCollisionPointRec(mouse, submit_btn.bounds)) {
                 FfmpegParams params = {
                     .input_path = input_path,
@@ -434,6 +580,7 @@ int main(void)
                     .crop_bottom = crop_bottom.value,
                     .crop_left = crop_left.value,
                     .crop_right = crop_right.value,
+                    .audio_channels = audio_channnels_radio_group.selected_value,
                 };
                 run_ffmpeg(params);
             }
@@ -459,6 +606,7 @@ int main(void)
             slider_draw(&crop_left, "crop left");
             slider_draw(&crop_right, "crop right");
             button_draw(&submit_btn, interacting_with.type == BUTTON && interacting_with.button == &submit_btn);
+            radio_group_draw(&audio_channnels_radio_group);
         EndDrawing();
     }
 
